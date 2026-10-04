@@ -51,7 +51,7 @@ const int COARSE_OFFSET = 10;
 const int COARSE_STEP = 5;
 
 // After the coarse search, the best area is searched at 1-PWM resolution.
-const int FINE_OFFSET = 2;
+const int FINE_OFFSET = 5;
 const int FINE_STEP = 1;
 
 // PWM is 8-bit in this sketch, so the valid range is 0-255.
@@ -63,11 +63,11 @@ const int MAX_PWM = 255;
 // dominate the result.
 const unsigned long SETTLE_TIME_MS = 1000;
 const unsigned long MEASUREMENT_WINDOW_MS = 700;
-const int MEASUREMENT_SAMPLES = 3;
+const int MEASUREMENT_SAMPLES = 5;
 
 // Final acceptance requirement.
 const float TARGET_MATCH_PERCENT = 3.5f;
-const int FINAL_CONFIRM_SAMPLES = 3;
+const int FINAL_CONFIRM_SAMPLES = 5;
 
 // Encoder glitch rejection.
 // One rising edge is counted once, and edges closer together than
@@ -850,7 +850,7 @@ void checkButton()
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   pinMode(AIN1, OUTPUT);
   pinMode(AIN2, OUTPUT);

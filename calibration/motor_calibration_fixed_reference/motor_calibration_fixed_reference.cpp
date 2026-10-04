@@ -702,7 +702,7 @@ void checkButton()
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   pinMode(AIN1, OUTPUT);
   pinMode(AIN2, OUTPUT);
