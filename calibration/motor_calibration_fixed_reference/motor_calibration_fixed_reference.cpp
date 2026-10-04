@@ -2,92 +2,72 @@
 #include <Preferences.h>
 
 // ============================================================
-// SPEED MEASUREMENT STRUCTURE
-// Must be declared before any functions because of the Arduino
-// IDE's automatic function-prototype generation.
-// ============================================================
-
-struct SpeedMeasurement
-{
-  float rpmA;
-  float rpmB;
-  float ppsA;
-  float ppsB;
-};
-
-// ============================================================
 // USER SETTINGS
 // ============================================================
 
-// Choose which motor is the fixed reference.
+// Choose which motor stays fixed at FIXED_PWM during calibration.
 enum FixedMotor
 {
   FIX_LEFT,
   FIX_RIGHT
 };
 
-// For your current project, use FIX_RIGHT.
-const FixedMotor FIXED_MOTOR = FIX_RIGHT;
+const FixedMotor FIXED_MOTOR = FIX_RIGHT;   // <-- CHANGE THIS
 
-// This is the motor-speed operating point you actually care about.
 const int FIXED_PWM = 200;
 
-// Encoder counts per mechanical wheel revolution.
-// Change these only after you have verified the value by repeated
-// manual-rotation tests.
-const float LEFT_PULSES_PER_REV  = 40.0f;
-const float RIGHT_PULSES_PER_REV = 40.0f;
+// Encoder settings
+const float MOTOR_A_PULSES_PER_REV = 40.0f; // LEFT
+const float MOTOR_B_PULSES_PER_REV = 40.0f; // RIGHT
 
-// ============================================================
-// CALIBRATION SEARCH
-// ============================================================
-
-// Your measurements around RIGHT=200 repeatedly put LEFT near 140.
-// The search therefore starts here rather than wasting time from 0.
-const int SEARCH_CENTER_PWM = 140;
-
-// The first coarse search checks center +/- this amount.
-const int COARSE_OFFSET = 10;
-const int COARSE_STEP = 5;
-
-// After the coarse search, the best area is searched at 1-PWM resolution.
-const int FINE_OFFSET = 2;
-const int FINE_STEP = 1;
-
-// PWM is 8-bit in this sketch, so the valid range is 0-255.
-const int MIN_PWM = 0;
-const int MAX_PWM = 255;
-
-// Measurement settings.
-// Median filtering is used so one noisy encoder window does not
-// dominate the result.
-const unsigned long SETTLE_TIME_MS = 1000;
-const unsigned long MEASUREMENT_WINDOW_MS = 700;
-const int MEASUREMENT_SAMPLES = 3;
-
-// Final acceptance requirement.
-const float TARGET_MATCH_PERCENT = 3.5f;
-const int FINAL_CONFIRM_SAMPLES = 3;
-
-// Encoder glitch rejection.
-// One rising edge is counted once, and edges closer together than
-// this are ignored.
+// Use only one edge of the encoder signal.
+// Change to 100-500 us if necessary for your encoder/noise level.
 const unsigned long ENCODER_MIN_INTERVAL_US = 200;
 
+// Calibration measurement
+const unsigned long CAL_SAMPLE_TIME = 2000; // ms per measurement
+const int CAL_AVERAGE_SAMPLES = 3;
+const unsigned long CAL_SETTLE_TIME = 1000;  // ms after changing PWM
+
+// Target speed matching tolerance.
+const float CAL_TOLERANCE_PERCENT = 3.0f;
+const int MATCH_CONFIRMATIONS = 4;
+
+// PWM adjustment limits for the motor being calibrated.
+const int CAL_MIN_PWM = 0;
+const int CAL_MAX_PWM = 255;
+const int CAL_MIN_STEP = 1;
+const int CAL_MAX_STEP = 25;
+const float CAL_GAIN = 0.255f;
+
+const int channelA = 0;
+const int channelB = 1;
+
+// Safety limit: prevents calibration from endlessly pushing PWM.
+const int CAL_MAX_CORRECTION = 150;
+
 // ============================================================
-// SPEED TEST BUTTON SETTINGS
+// SPEED TEST SETTINGS
 // ============================================================
 
-const unsigned long SPEED_TEST_SETTLE_MS = 1000;
-const unsigned long SPEED_TEST_WINDOW_MS = 1000;
-const int SPEED_TEST_SAMPLES = 5;
-const float SPEED_TEST_MATCH_PERCENT = 3.0f;
+const unsigned long SPEED_TEST_SETTLE_TIME = 500;
+const unsigned long SPEED_TEST_TIME = 3000;
+const int SPEED_TEST_SAMPLES = 3;
+const float SPEED_TEST_MATCH_PERCENT = 2.5f;
+
+struct SpeedMeasurement
+{
+  float ppsA;
+  float ppsB;
+  float rpmA;
+  float rpmB;
+};
+
+// ============================================================
+// BUTTON / BRAKE SETTINGS
+// ============================================================
 
 const unsigned long BUTTON_DEBOUNCE = 30;
-
-// ============================================================
-// OPTIONAL BRAKING
-// ============================================================
 
 bool activateBrakes = false;
 const unsigned long BRAKE_TIME = 60;
@@ -96,12 +76,12 @@ const unsigned long BRAKE_TIME = 60;
 // PINS
 // ============================================================
 
-// LEFT motor
+// Motor A = LEFT
 #define PWMA 25
 #define AIN1 26
 #define AIN2 27
 
-// RIGHT motor
+// Motor B = RIGHT
 #define PWMB 14
 #define BIN1 4
 #define BIN2 13
@@ -127,26 +107,26 @@ volatile unsigned long lastBEncoderMicros = 0;
 int motorAPWM = FIXED_PWM;
 int motorBPWM = FIXED_PWM;
 
-int savedMotorAPWM = FIXED_PWM;
-int savedMotorBPWM = FIXED_PWM;
-
-float savedMotorARPM = 0.0f;
-float savedMotorBRPM = 0.0f;
-
-float savedMotorAPPS = 0.0f;
-float savedMotorBPPS = 0.0f;
-
 bool calibrationComplete = false;
 bool buttonArmed = false;
 
-const int channelA = 0;
-const int channelB = 1;
+float savedMotorAPPS = 0.0f;
+float savedMotorBPPS = 0.0f;
+float savedMotorARPM = 0.0f;
+float savedMotorBRPM = 0.0f;
+
+int savedMotorAPWM = FIXED_PWM;
+int savedMotorBPWM = FIXED_PWM;
 
 Preferences preferences;
 
 // ============================================================
 // ENCODER INTERRUPTS
 // ============================================================
+
+// IMPORTANT:
+// We now use RISING instead of CHANGE so one pulse is counted once.
+// The minimum-time filter rejects extremely fast false transitions.
 
 void IRAM_ATTR motorAISR()
 {
@@ -171,7 +151,7 @@ void IRAM_ATTR motorBISR()
 }
 
 // ============================================================
-// BUZZER
+// BASIC MOTOR FUNCTIONS
 // ============================================================
 
 void beepOnce()
@@ -207,10 +187,6 @@ void beepTriple()
   }
 }
 
-// ============================================================
-// MOTOR CONTROL
-// ============================================================
-
 void setForwardDirection()
 {
   digitalWrite(AIN1, HIGH);
@@ -222,8 +198,8 @@ void setForwardDirection()
 
 void writeMotorPWM()
 {
-  motorAPWM = constrain(motorAPWM, MIN_PWM, MAX_PWM);
-  motorBPWM = constrain(motorBPWM, MIN_PWM, MAX_PWM);
+  motorAPWM = constrain(motorAPWM, 0, CAL_MAX_PWM);
+  motorBPWM = constrain(motorBPWM, 0, CAL_MAX_PWM);
 
   ledcWrite(channelA, motorAPWM);
   ledcWrite(channelB, motorBPWM);
@@ -269,10 +245,10 @@ void stopAndOptionalBrake()
 }
 
 // ============================================================
-// ENCODER COUNT HANDLING
+// ENCODER COUNT MANAGEMENT
 // ============================================================
 
-void resetEncoderCounts()
+void resetAllEncoderCounts()
 {
   unsigned long now = micros();
 
@@ -284,7 +260,7 @@ void resetEncoderCounts()
   interrupts();
 }
 
-void readAndClearCounts(unsigned long &countA, unsigned long &countB)
+void readAndClearBothCounts(unsigned long &countA, unsigned long &countB)
 {
   noInterrupts();
   countA = motorACount;
@@ -295,15 +271,14 @@ void readAndClearCounts(unsigned long &countA, unsigned long &countB)
 }
 
 // ============================================================
-// ONE SPEED SAMPLE
+// SPEED MEASUREMENT
 // ============================================================
 
 SpeedMeasurement measureSpeedOnce(unsigned long durationMs)
 {
-  SpeedMeasurement result = {0, 0, 0, 0};
+  SpeedMeasurement result;
 
-  resetEncoderCounts();
-
+  resetAllEncoderCounts();
   unsigned long startTime = millis();
 
   while (millis() - startTime < durationMs)
@@ -311,87 +286,39 @@ SpeedMeasurement measureSpeedOnce(unsigned long durationMs)
     yield();
   }
 
-  unsigned long countA;
-  unsigned long countB;
-  readAndClearCounts(countA, countB);
+  unsigned long countA = 0;
+  unsigned long countB = 0;
+  readAndClearBothCounts(countA, countB);
 
   float seconds = durationMs / 1000.0f;
 
   result.ppsA = countA / seconds;
   result.ppsB = countB / seconds;
 
-  result.rpmA = (result.ppsA / LEFT_PULSES_PER_REV) * 60.0f;
-  result.rpmB = (result.ppsB / RIGHT_PULSES_PER_REV) * 60.0f;
+  result.rpmA = (result.ppsA / MOTOR_A_PULSES_PER_REV) * 60.0f;
+  result.rpmB = (result.ppsB / MOTOR_B_PULSES_PER_REV) * 60.0f;
 
   return result;
 }
 
-// ============================================================
-// MEDIAN HELPER
-// ============================================================
-
-float medianOf(float values[], int count)
-{
-  float sorted[10];
-
-  if (count > 10)
-    count = 10;
-
-  for (int i = 0; i < count; i++)
-    sorted[i] = values[i];
-
-  for (int i = 0; i < count - 1; i++)
-  {
-    for (int j = i + 1; j < count; j++)
-    {
-      if (sorted[j] < sorted[i])
-      {
-        float temp = sorted[i];
-        sorted[i] = sorted[j];
-        sorted[j] = temp;
-      }
-    }
-  }
-
-  if (count % 2 == 1)
-    return sorted[count / 2];
-
-  return (sorted[count / 2 - 1] + sorted[count / 2]) / 2.0f;
-}
-
-// ============================================================
-// FILTERED SPEED MEASUREMENT
-// ============================================================
-
-SpeedMeasurement measureFilteredSpeed()
+SpeedMeasurement measureAverageSpeed()
 {
   SpeedMeasurement result = {0, 0, 0, 0};
 
-  float rpmA[10];
-  float rpmB[10];
-  float ppsA[10];
-  float ppsB[10];
-
-  int sampleCount = MEASUREMENT_SAMPLES;
-
-  if (sampleCount > 10)
-    sampleCount = 10;
-
-  for (int i = 0; i < sampleCount; i++)
+  for (int i = 0; i < CAL_AVERAGE_SAMPLES; i++)
   {
-    SpeedMeasurement sample =
-        measureSpeedOnce(MEASUREMENT_WINDOW_MS);
+    SpeedMeasurement sample = measureSpeedOnce(CAL_SAMPLE_TIME);
 
-    rpmA[i] = sample.rpmA;
-    rpmB[i] = sample.rpmB;
-    ppsA[i] = sample.ppsA;
-    ppsB[i] = sample.ppsB;
+    result.ppsA += sample.ppsA;
+    result.ppsB += sample.ppsB;
+    result.rpmA += sample.rpmA;
+    result.rpmB += sample.rpmB;
   }
 
-  result.rpmA = medianOf(rpmA, sampleCount);
-  result.rpmB = medianOf(rpmB, sampleCount);
-  result.ppsA = medianOf(ppsA, sampleCount);
-  result.ppsB = medianOf(ppsB, sampleCount);
+  result.ppsA /= CAL_AVERAGE_SAMPLES;
+  result.ppsB /= CAL_AVERAGE_SAMPLES;
+  result.rpmA /= CAL_AVERAGE_SAMPLES;
+  result.rpmB /= CAL_AVERAGE_SAMPLES;
 
   return result;
 }
@@ -407,44 +334,6 @@ float speedDifferencePercent(float speedA, float speedB)
 }
 
 // ============================================================
-// RUN A PWM CANDIDATE
-// ============================================================
-
-SpeedMeasurement testAdjustablePWM(int adjustablePWM)
-{
-  adjustablePWM = constrain(adjustablePWM, MIN_PWM, MAX_PWM);
-
-  if (FIXED_MOTOR == FIX_LEFT)
-  {
-    motorAPWM = FIXED_PWM;
-    motorBPWM = adjustablePWM;
-  }
-  else
-  {
-    motorAPWM = adjustablePWM;
-    motorBPWM = FIXED_PWM;
-  }
-
-  writeMotorPWM();
-
-  delay(SETTLE_TIME_MS);
-
-  SpeedMeasurement speed = measureFilteredSpeed();
-
-  Serial.print("PWM candidate = ");
-  Serial.print(adjustablePWM);
-  Serial.print(" | LEFT RPM = ");
-  Serial.print(speed.rpmA, 2);
-  Serial.print(" | RIGHT RPM = ");
-  Serial.print(speed.rpmB, 2);
-  Serial.print(" | Error = ");
-  Serial.print(speedDifferencePercent(speed.rpmA, speed.rpmB), 2);
-  Serial.println(" %");
-
-  return speed;
-}
-
-// ============================================================
 // CALIBRATION STORAGE
 // ============================================================
 
@@ -453,20 +342,20 @@ void saveCalibration(const SpeedMeasurement &speed)
   savedMotorAPWM = motorAPWM;
   savedMotorBPWM = motorBPWM;
 
-  savedMotorARPM = speed.rpmA;
-  savedMotorBRPM = speed.rpmB;
-
   savedMotorAPPS = speed.ppsA;
   savedMotorBPPS = speed.ppsB;
+
+  savedMotorARPM = speed.rpmA;
+  savedMotorBRPM = speed.rpmB;
 
   preferences.begin("motorCal", false);
 
   preferences.putInt("motorAPWM", savedMotorAPWM);
   preferences.putInt("motorBPWM", savedMotorBPWM);
-  preferences.putFloat("motorARPM", savedMotorARPM);
-  preferences.putFloat("motorBRPM", savedMotorBRPM);
   preferences.putFloat("motorAPPS", savedMotorAPPS);
   preferences.putFloat("motorBPPS", savedMotorBPPS);
+  preferences.putFloat("motorARPM", savedMotorARPM);
+  preferences.putFloat("motorBRPM", savedMotorBRPM);
   preferences.putBool("valid", true);
 
   preferences.end();
@@ -479,309 +368,271 @@ void saveCalibration(const SpeedMeasurement &speed)
   Serial.println(savedMotorAPWM);
   Serial.print("RIGHT PWM : ");
   Serial.println(savedMotorBPWM);
+  Serial.print("LEFT PPS  : ");
+  Serial.println(savedMotorAPPS, 2);
+  Serial.print("RIGHT PPS : ");
+  Serial.println(savedMotorBPPS, 2);
   Serial.print("LEFT RPM  : ");
   Serial.println(savedMotorARPM, 2);
   Serial.print("RIGHT RPM : ");
   Serial.println(savedMotorBRPM, 2);
   Serial.print("MATCH ERR : ");
-  Serial.print(speedDifferencePercent(savedMotorARPM, savedMotorBRPM), 2);
+  Serial.print(speedDifferencePercent(savedMotorAPPS, savedMotorBPPS), 2);
   Serial.println(" %");
 }
 
 // ============================================================
-// DIRECT TARGET-POINT CALIBRATION
+// CALIBRATION
 // ============================================================
 
 void calibrateMotors()
 {
   Serial.println();
   Serial.println("========================================");
-  Serial.println("TARGET-POINT MOTOR CALIBRATION");
+  Serial.println("MOTOR CALIBRATION");
   Serial.println("========================================");
 
   if (FIXED_MOTOR == FIX_LEFT)
-    Serial.println("REFERENCE: LEFT MOTOR");
+    Serial.println("REFERENCE: LEFT motor fixed");
   else
-    Serial.println("REFERENCE: RIGHT MOTOR");
+    Serial.println("REFERENCE: RIGHT motor fixed");
 
-  Serial.print("REFERENCE PWM: ");
+  Serial.print("FIXED PWM: ");
   Serial.println(FIXED_PWM);
-  Serial.println();
-  Serial.println("The reference motor will NOT change.");
-  Serial.println("Only the other motor is searched.");
+  Serial.println("The other motor will be adjusted only.");
   Serial.println();
 
   calibrationComplete = false;
 
   setForwardDirection();
+  delay(1000);
 
-  // Start at the search centre.
-  int bestPWM = constrain(SEARCH_CENTER_PWM, MIN_PWM, MAX_PWM);
-  float bestError = 1000000.0f;
-  SpeedMeasurement bestSpeed = {0, 0, 0, 0};
-
-  // ----------------------------------------------------------
-  // COARSE SEARCH
-  // ----------------------------------------------------------
-
-  Serial.println("--- COARSE SEARCH ---");
-  delay(500);
-  beepOnce();
-
-  int coarseStart = SEARCH_CENTER_PWM - COARSE_OFFSET;
-  int coarseEnd   = SEARCH_CENTER_PWM + COARSE_OFFSET;
-
-  for (int pwm = coarseStart; pwm <= coarseEnd; pwm += COARSE_STEP)
-  {
-    if (pwm < MIN_PWM || pwm > MAX_PWM)
-      continue;
-
-    SpeedMeasurement speed = testAdjustablePWM(pwm);
-    float error = speedDifferencePercent(speed.rpmA, speed.rpmB);
-
-    if (error < bestError)
-    {
-      bestError = error;
-      bestPWM = pwm;
-      bestSpeed = speed;
-    }
-  }
-
-  Serial.println();
-  Serial.print("Best coarse PWM: ");
-  Serial.print(bestPWM);
-  Serial.print(" | Error: ");
-  Serial.print(bestError, 2);
-  Serial.println(" %");
-
-  // ----------------------------------------------------------
-  // FINE SEARCH
-  // ----------------------------------------------------------
-
-  Serial.println();
-  Serial.println("--- FINE SEARCH ---");
-
-  beepOnce();
-
-  int fineStart = bestPWM - FINE_OFFSET;
-  int fineEnd   = bestPWM + FINE_OFFSET;
-
-  for (int pwm = fineStart; pwm <= fineEnd; pwm += FINE_STEP)
-  {
-    if (pwm < MIN_PWM || pwm > MAX_PWM)
-      continue;
-
-    SpeedMeasurement speed = testAdjustablePWM(pwm);
-    float error = speedDifferencePercent(speed.rpmA, speed.rpmB);
-
-    if (error < bestError)
-    {
-      bestError = error;
-      bestPWM = pwm;
-      bestSpeed = speed;
-    }
-  }
-
-  // ----------------------------------------------------------
-  // APPLY BEST RESULT
-  // ----------------------------------------------------------
-
-  if (FIXED_MOTOR == FIX_LEFT)
-  {
-    motorAPWM = FIXED_PWM;
-    motorBPWM = bestPWM;
-  }
-  else
-  {
-    motorAPWM = bestPWM;
-    motorBPWM = FIXED_PWM;
-  }
-
+  // Start both motors at the fixed PWM.
+  motorAPWM = FIXED_PWM;
+  motorBPWM = FIXED_PWM;
   writeMotorPWM();
 
-  Serial.println();
-  Serial.println("========================================");
-  Serial.println("BEST PWM FOUND");
-  Serial.println("========================================");
-  Serial.print("LEFT PWM  : ");
-  Serial.println(motorAPWM);
-  Serial.print("RIGHT PWM : ");
-  Serial.println(motorBPWM);
+  delay(SPEED_TEST_SETTLE_TIME);
 
-  delay(SETTLE_TIME_MS);
+  int adjustablePWM = FIXED_PWM;
+  int consecutiveMatches = 0;
 
-  // ----------------------------------------------------------
-  // FINAL CONFIRMATION
-  // ----------------------------------------------------------
-
-  Serial.println();
-  Serial.println("--- FINAL CONFIRMATION ---");
-
-  beepOnce();
-
-  float finalRPM_A[10];
-  float finalRPM_B[10];
-  float finalError[10];
-
-  int confirmations = FINAL_CONFIRM_SAMPLES;
-  if (confirmations > 10)
-    confirmations = 10;
-
-  for (int i = 0; i < confirmations; i++)
+  while (!calibrationComplete)
   {
-    SpeedMeasurement speed = measureSpeedOnce(1000);
+    SpeedMeasurement speed = measureAverageSpeed();
 
-    finalRPM_A[i] = speed.rpmA;
-    finalRPM_B[i] = speed.rpmB;
-    finalError[i] = speedDifferencePercent(speed.rpmA, speed.rpmB);
+    float matchError = speedDifferencePercent(speed.ppsA, speed.ppsB);
 
-    Serial.print("Confirmation ");
-    Serial.print(i + 1);
-    Serial.print("/");
-    Serial.print(confirmations);
-    Serial.print(" | L = ");
+    Serial.println();
+    Serial.println("--- Calibration measurement ---");
+    Serial.print("LEFT  PWM: ");
+    Serial.print(motorAPWM);
+    Serial.print(" | ");
+    Serial.print(speed.ppsA, 2);
+    Serial.print(" PPS | ");
     Serial.print(speed.rpmA, 2);
-    Serial.print(" RPM | R = ");
+    Serial.println(" RPM");
+
+    Serial.print("RIGHT PWM: ");
+    Serial.print(motorBPWM);
+    Serial.print(" | ");
+    Serial.print(speed.ppsB, 2);
+    Serial.print(" PPS | ");
     Serial.print(speed.rpmB, 2);
-    Serial.print(" RPM | Error = ");
-    Serial.print(finalError[i], 2);
+    Serial.println(" RPM");
+
+    Serial.print("Match error: ");
+    Serial.print(matchError, 2);
     Serial.println(" %");
-  }
 
-  float confirmedRPM_A = medianOf(finalRPM_A, confirmations);
-  float confirmedRPM_B = medianOf(finalRPM_B, confirmations);
-  float confirmedError = speedDifferencePercent(confirmedRPM_A, confirmedRPM_B);
+    if (speed.ppsA <= 0.0f || speed.ppsB <= 0.0f)
+    {
+      Serial.println("Encoder speed is zero. Check encoder wiring/mechanics.");
+      consecutiveMatches = 0;
+      delay(300);
+      continue;
+    }
 
-  Serial.println();
-  Serial.println("========================================");
-  Serial.println("FINAL CALIBRATION RESULT");
-  Serial.println("========================================");
-  Serial.print("LEFT PWM       : ");
-  Serial.println(motorAPWM);
-  Serial.print("RIGHT PWM      : ");
-  Serial.println(motorBPWM);
-  Serial.print("LEFT MEDIAN RPM: ");
-  Serial.println(confirmedRPM_A, 2);
-  Serial.print("RIGHT MEDIAN RPM: ");
-  Serial.println(confirmedRPM_B, 2);
-  Serial.print("MATCH ERROR    : ");
-  Serial.print(confirmedError, 2);
-  Serial.println(" %");
+    // Both are within the allowed speed difference.
+    if (matchError <= CAL_TOLERANCE_PERCENT)
+    {
+      consecutiveMatches++;
 
-  if (confirmedError <= TARGET_MATCH_PERCENT)
-  {
-    calibrationComplete = true;
+      Serial.print("MATCH CONFIRMATION: ");
+      Serial.print(consecutiveMatches);
+      Serial.print("/");
+      Serial.println(MATCH_CONFIRMATIONS);
 
-    SpeedMeasurement confirmedSpeed;
-    confirmedSpeed.rpmA = confirmedRPM_A;
-    confirmedSpeed.rpmB = confirmedRPM_B;
-    confirmedSpeed.ppsA = (confirmedRPM_A / 60.0f) * LEFT_PULSES_PER_REV;
-    confirmedSpeed.ppsB = (confirmedRPM_B / 60.0f) * RIGHT_PULSES_PER_REV;
+      if (consecutiveMatches >= MATCH_CONFIRMATIONS)
+      {
+        calibrationComplete = true;
 
-    saveCalibration(confirmedSpeed);
+        saveCalibration(speed);
+        stopAndOptionalBrake();
 
-    stopAndOptionalBrake();
+        Serial.println();
+        Serial.println("*** CALIBRATION SUCCESSFUL ***");
+        beepTriple();
+        buttonArmed = false;
+        return;
+      }
 
-    Serial.println();
-    Serial.println("*** CALIBRATION SUCCESSFUL ***");
-    beepTriple();
-    Serial.println();
-    Serial.println("========================================");
-    Serial.println("SYSTEM READY");
-    Serial.println("========================================");
-    Serial.println("Press button for saved-PWM speed test.");
-  }
-  else
-  {
-    calibrationComplete = false;
+      continue;
+    }
 
-    stopAndOptionalBrake();
+    consecutiveMatches = 0;
 
-    Serial.println();
-    Serial.println("*** CALIBRATION DID NOT REACH TARGET ***");
-    Serial.println("The closest measured PWM has been displayed but NOT saved.");
-    Serial.println("Check encoder stability, mechanics and motor supply.");
+    // Which motor needs to change?
+    float fixedSpeed;
+    float adjustableSpeed;
+
+    if (FIXED_MOTOR == FIX_LEFT)
+    {
+      fixedSpeed = speed.ppsA;
+      adjustableSpeed = speed.ppsB;
+    }
+    else
+    {
+      fixedSpeed = speed.ppsB;
+      adjustableSpeed = speed.ppsA;
+    }
+
+    // Positive error means adjustable motor needs to slow down.
+    // Negative error means adjustable motor needs to speed up.
+    float relativeError = (adjustableSpeed - fixedSpeed) / fixedSpeed;
+
+    int step = (int)round(abs(relativeError) * FIXED_PWM * CAL_GAIN);
+    step = constrain(step, CAL_MIN_STEP, CAL_MAX_STEP);
+
+    if (relativeError > 0.0f)
+    {
+      adjustablePWM -= step;
+      Serial.print("Adjustable motor is FASTER -> PWM -");
+      Serial.println(step);
+    }
+    else
+    {
+      adjustablePWM += step;
+      Serial.print("Adjustable motor is SLOWER -> PWM +");
+      Serial.println(step);
+    }
+
+    adjustablePWM = constrain(adjustablePWM,
+                              max(CAL_MIN_PWM, FIXED_PWM - CAL_MAX_CORRECTION),
+                              min(CAL_MAX_PWM, FIXED_PWM + CAL_MAX_CORRECTION));
+
+    if (FIXED_MOTOR == FIX_LEFT)
+    {
+      motorAPWM = FIXED_PWM;
+      motorBPWM = adjustablePWM;
+    }
+    else
+    {
+      motorAPWM = adjustablePWM;
+      motorBPWM = FIXED_PWM;
+    }
+
+    writeMotorPWM();
+
+    Serial.print("New LEFT PWM : ");
+    Serial.println(motorAPWM);
+    Serial.print("New RIGHT PWM: ");
+    Serial.println(motorBPWM);
+
     beepOnce();
+    delay(CAL_SETTLE_TIME);
   }
 }
 
 // ============================================================
-// BUTTON SPEED TEST
+// SPEED TEST BUTTON ACTION
 // ============================================================
 
 void speedMatchTest()
 {
   Serial.println();
   Serial.println("========================================");
-  Serial.println("SAVED-PWM SPEED MATCH TEST");
+  Serial.println("MOTOR SPEED MATCH TEST");
   Serial.println("========================================");
-  Serial.println("Both motors run using the saved calibration.");
+  Serial.println("Both motors will run at their saved PWM.");
   Serial.println();
 
+  stopMotors();
   setForwardDirection();
+  delay(SPEED_TEST_SETTLE_TIME);
 
   motorAPWM = savedMotorAPWM;
   motorBPWM = savedMotorBPWM;
   writeMotorPWM();
 
-  delay(SPEED_TEST_SETTLE_MS);
+  Serial.print("1 SECOND DELAY");
+  Serial.print(" ");
+  delay(1000);
 
-  float rpmA[10];
-  float rpmB[10];
-  float ppsA[10];
-  float ppsB[10];
+  float totalPPSA = 0.0f;
+  float totalPPSB = 0.0f;
+  float totalRPMA = 0.0f;
+  float totalRPMB = 0.0f;
 
-  int samples = SPEED_TEST_SAMPLES;
-  if (samples > 10)
-    samples = 10;
-
-  for (int i = 0; i < samples; i++)
+  for (int i = 0; i < SPEED_TEST_SAMPLES; i++)
   {
-    SpeedMeasurement speed = measureSpeedOnce(SPEED_TEST_WINDOW_MS);
+    SpeedMeasurement speed = measureSpeedOnce(SPEED_TEST_TIME);
 
-    rpmA[i] = speed.rpmA;
-    rpmB[i] = speed.rpmB;
-    ppsA[i] = speed.ppsA;
-    ppsB[i] = speed.ppsB;
+    totalPPSA += speed.ppsA;
+    totalPPSB += speed.ppsB;
+    totalRPMA += speed.rpmA;
+    totalRPMB += speed.rpmB;
 
     Serial.print("Test ");
     Serial.print(i + 1);
     Serial.print("/");
-    Serial.print(samples);
-    Serial.print(" | LEFT = ");
+    Serial.println(SPEED_TEST_SAMPLES);
+
+    Serial.print("  LEFT : ");
+    Serial.print(speed.ppsA, 2);
+    Serial.print(" PPS | ");
     Serial.print(speed.rpmA, 2);
-    Serial.print(" RPM | RIGHT = ");
+    Serial.println(" RPM");
+
+    Serial.print("  RIGHT: ");
+    Serial.print(speed.ppsB, 2);
+    Serial.print(" PPS | ");
     Serial.print(speed.rpmB, 2);
-    Serial.print(" RPM | Error = ");
-    Serial.print(speedDifferencePercent(speed.rpmA, speed.rpmB), 2);
+    Serial.println(" RPM");
+
+    Serial.print("  Error: ");
+    Serial.print(speedDifferencePercent(speed.ppsA, speed.ppsB), 2);
     Serial.println(" %");
+    Serial.println();
   }
-
-  float medianRPM_A = medianOf(rpmA, samples);
-  float medianRPM_B = medianOf(rpmB, samples);
-  float medianPPS_A = medianOf(ppsA, samples);
-  float medianPPS_B = medianOf(ppsB, samples);
-
-  float finalError = speedDifferencePercent(medianRPM_A, medianRPM_B);
 
   stopAndOptionalBrake();
 
-  Serial.println();
+  float avgPPSA = totalPPSA / SPEED_TEST_SAMPLES;
+  float avgPPSB = totalPPSB / SPEED_TEST_SAMPLES;
+  float avgRPMA = totalRPMA / SPEED_TEST_SAMPLES;
+  float avgRPMB = totalRPMB / SPEED_TEST_SAMPLES;
+  float finalError = speedDifferencePercent(avgPPSA, avgPPSB);
+
   Serial.println("========================================");
-  Serial.println("SPEED TEST RESULT");
+  Serial.println("FINAL SPEED TEST RESULT");
   Serial.println("========================================");
+
   Serial.print("LEFT PWM       : ");
   Serial.println(savedMotorAPWM);
   Serial.print("RIGHT PWM      : ");
   Serial.println(savedMotorBPWM);
-  Serial.print("LEFT MEDIAN RPM: ");
-  Serial.println(medianRPM_A, 2);
-  Serial.print("RIGHT MEDIAN RPM: ");
-  Serial.println(medianRPM_B, 2);
-  Serial.print("LEFT MEDIAN PPS: ");
-  Serial.println(medianPPS_A, 2);
-  Serial.print("RIGHT MEDIAN PPS: ");
-  Serial.println(medianPPS_B, 2);
+
+  Serial.print("LEFT AVG PPS   : ");
+  Serial.println(avgPPSA, 2);
+  Serial.print("RIGHT AVG PPS  : ");
+  Serial.println(avgPPSB, 2);
+
+  Serial.print("LEFT AVG RPM   : ");
+  Serial.println(avgRPMA, 2);
+  Serial.print("RIGHT AVG RPM  : ");
+  Serial.println(avgRPMB, 2);
+
   Serial.print("SPEED DIFFERENCE: ");
   Serial.print(finalError, 2);
   Serial.println(" %");
@@ -795,7 +646,8 @@ void speedMatchTest()
   else
   {
     Serial.println();
-    Serial.println("RESULT: SPEEDS ARE NOT WITHIN THE TEST LIMIT.");
+    Serial.println("RESULT: SPEEDS ARE NOT YET MATCHED.");
+    Serial.println("Check encoder readings and repeat calibration.");
     beepOnce();
   }
 }
@@ -831,7 +683,7 @@ void checkButton()
       buttonArmed = false;
 
       Serial.println();
-      Serial.println("BUTTON PRESSED -> SPEED TEST");
+      Serial.println("BUTTON PRESSED -> SPEED MATCH TEST");
 
       speedMatchTest();
 
@@ -862,14 +714,17 @@ void setup()
   pinMode(MOTOR_A_ENCODER, INPUT_PULLUP);
   pinMode(MOTOR_B_ENCODER, INPUT_PULLUP);
 
-  // GPIO35 is input-only. External wiring:
+  // GPIO 35 is input-only and has no internal pull-up.
+  // Your external wiring is:
   // 3.3V -> 10k resistor -> GPIO35
   // switch -> GND
   pinMode(SWITCH_PIN, INPUT);
 
+  // Arduino-ESP32 LEDC API used by your original sketch.
   ledcSetup(channelA, 1000, 8);
   ledcSetup(channelB, 1000, 8);
 
+  // 3. Attach the physical pins to those channels
   ledcAttachPin(PWMA, channelA);
   ledcAttachPin(PWMB, channelB);
 
@@ -877,7 +732,7 @@ void setup()
 
   setForwardDirection();
   stopMotors();
-  resetEncoderCounts();
+  resetAllEncoderCounts();
 
   attachInterrupt(
     digitalPinToInterrupt(MOTOR_A_ENCODER),
@@ -895,6 +750,17 @@ void setup()
 
   calibrateMotors();
 
+  Serial.println();
+  Serial.println("========================================");
+  Serial.println("SYSTEM READY");
+  Serial.println("========================================");
+  Serial.println("Press button for SPEED MATCH TEST.");
+  Serial.print("Reference motor: ");
+  Serial.println(FIXED_MOTOR == FIX_LEFT ? "LEFT" : "RIGHT");
+  Serial.print("Reference PWM: ");
+  Serial.println(FIXED_PWM);
+  Serial.print("Brake system: ");
+  Serial.println(activateBrakes ? "ENABLED" : "DISABLED");
 }
 
 // ============================================================
