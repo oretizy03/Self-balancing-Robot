@@ -1,4 +1,4 @@
-# Fixed-Center-of-Gravity-Self-balancing-Robot-Firmware
+# Self balancing Robot
 
 Firmware for a two-wheel self-balancing robot based on an **ESP32**. The project focuses on accurate motor control, encoder-based speed measurement, motor calibration, balancing calibration, and **PID-based stabilization**.
 
