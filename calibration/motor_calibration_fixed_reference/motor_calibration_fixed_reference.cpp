@@ -1,6 +1,5 @@
 /*
- * MOTOR CALIBRATION (Stage 2 of 3)
- * ESP32 + Arduino framework, PlatformIO
+ * MOTOR CALIBRATION (Stage 2 of 3): A fixed reference approach
  
  * WHAT IT DOES
   Finds an approximate PWM for the adjustable motor so that both motors spin at the same encoder speed. One motor (FIXED_MOTOR) is held at FIXED_PWM as the reference. The other motor's PWM is adjusted until the speed difference stays within CAL_TOLERANCE_PERCENT for MATCH_CONFIRMATIONS consecutive measurements. The result is printed on he serial monitor and saved to flash. The PWM it a starting point for Stage 3 (refinement), not as a final value.
@@ -799,6 +798,7 @@ void checkButton()
 
 void setup()
 {
+  beepTwice();
   Serial.begin(115200);
   delay(1500);  // lets the serial monitor reconnect after upload/reset
   pinMode(AIN1, OUTPUT);
@@ -821,8 +821,7 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(MOTOR_A_ENCODER), motorAISR, RISING);
   attachInterrupt(digitalPinToInterrupt(MOTOR_B_ENCODER), motorBISR, RISING);
 
-  beepTwice();
-  delay(300);
+  
 
   bool ready = false;
 
@@ -860,5 +859,5 @@ void setup()
 void loop()
 {
   checkButton();
-  delay(5);
+  delay(10);
 }
