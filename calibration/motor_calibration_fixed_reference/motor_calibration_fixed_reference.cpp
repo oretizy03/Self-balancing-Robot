@@ -14,9 +14,12 @@
        1 beep     = adjustable motor PWM was just changed
        3 beeps    = calibration finished
        5 beeps   = calibration failed (read the serial message)
-  5. Write down the LEFT PWM and RIGHT PWM from the "CALIBRATION SAVED" block. The fixed motor shows  FIXED_PWM; the other value is your result.
-  6. Optional: press the button to run the speed-match test (passes at SPEED_TEST_MATCH_PERCENT or less).
-  7. Reset the board and repeat steps 4-6 several times. Use the adjustable-motor PWM that appears most consistently (or the median) as the input for Stage 3.
+  5. Write down the LEFT PWM and RIGHT PWM from the "CALIBRATION SAVED" block. The fixed motor shows
+     FIXED_PWM; the other value is your result.
+  6. Optional: press the button to run the speed-match test (passes at SPEED_TEST_MATCH_PERCENT or
+     less).
+  7. Reset the board and repeat steps 4-6 several times. Use the adjustable-motor PWM that appears
+     most consistently (or the median) as the input for Stage 3.
  */
 
 #include <Arduino.h>
