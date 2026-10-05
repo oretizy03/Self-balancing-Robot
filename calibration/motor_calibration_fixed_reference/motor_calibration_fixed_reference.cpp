@@ -1,8 +1,22 @@
 /*
- * Dual-motor speed matching / calibration
- * ESP32 + Arduino framework, PlatformIO (VS Code)
- *
- * Builds against Arduino-ESP32 core 2.x and 3.x.
+ * MOTOR CALIBRATION (Stage 2 of 3)
+ * ESP32 + Arduino framework, PlatformIO
+ 
+ * WHAT IT DOES
+  Finds an approximate PWM for the adjustable motor so that both motors spin at the same encoder speed. One motor (FIXED_MOTOR) is held at FIXED_PWM as the reference. The other motor's PWM is adjusted until the speed difference stays within CAL_TOLERANCE_PERCENT for MATCH_CONFIRMATIONS consecutive measurements. The result is printed on he serial monitor and saved to flash. The PWM it a starting point for Stage 3 (refinement), not as a final value.
+
+ * HOW TO USE
+  1. Lift the wheels off the ground. Use the same battery level for every run.
+  2. Set FIXED_MOTOR and FIXED_PWM in USER SETTINGS.
+  3. Upload, then open the Serial Monitor at 115200 baud.
+  4. Listen to the buzzer and observe the serial output. The buzzer indicates:
+       2 beeps    = system active, motors start about 1 s later
+       1 beep     = adjustable motor PWM was just changed
+       3 beeps    = calibration finished
+       5 beeps   = calibration failed (read the serial message)
+  5. Write down the LEFT PWM and RIGHT PWM from the "CALIBRATION SAVED" block. The fixed motor shows  FIXED_PWM; the other value is your result.
+  6. Optional: press the button to run the speed-match test (passes at SPEED_TEST_MATCH_PERCENT or less).
+  7. Reset the board and repeat steps 4-6 several times. Use the adjustable-motor PWM that appears most consistently (or the median) as the input for Stage 3.
  */
 
 #include <Arduino.h>
