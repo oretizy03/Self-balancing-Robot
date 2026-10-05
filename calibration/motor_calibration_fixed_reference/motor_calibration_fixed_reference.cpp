@@ -35,7 +35,6 @@ enum FixedMotor
 };
 
 const FixedMotor FIXED_MOTOR = FIX_RIGHT;
-
 const int FIXED_PWM = 200;
 
 // true  = calibrate every boot
