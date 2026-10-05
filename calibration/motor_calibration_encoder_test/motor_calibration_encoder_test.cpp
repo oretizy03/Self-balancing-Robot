@@ -1,23 +1,18 @@
 /*
-ENCODER TEST
+* MOTOR CALIBRATION (Stage 1 of 3): ENCODER COUNT TEST
 
-Purpose:
+* WHAT IT DOES
 Measure the encoder pulses per wheel revolution.
 
-Pins (you can use preferred pins):
-LEFT  / Motor A -> GPIO 18
-RIGHT / Motor B -> GPIO 19
-
-How to use:
+* HOW TO USE:
 1. Upload the sketch and open Serial Monitor at 115200 baud.
 2. Keep the motors OFF and rotate the wheels by hand.
 3. Type A to test the left wheel or B to test the right wheel. 
-4. Rotate the selected wheel exactly 10 complete revolutions. The program does not count the 10 revolutions automatically. You must count
-the physical wheel revolutions yourself.
+4. Rotate the selected wheel exactly 10 complete revolutions. The program does not count the 10 revolutions automatically. You must count the physical wheel revolutions yourself.
 5. Type DONE and press Enter to display the result.
 6. Repeat each test 3 times for consistency.
 
-Commands:
+* COMMANDS:
 A     = Start LEFT test
 B     = Start RIGHT test
 DONE  = Finish active test and calculate counts/revolution
@@ -25,8 +20,12 @@ R     = Reset both counters
 S     = Show current raw encoder counts
 X     = Cancel active test
 
-Note:
+* NOTE:
 Counts per revolution = Total pulses / 10
+
+Pins (you can use preferred pins):
+LEFT  / Motor A -> GPIO 18
+RIGHT / Motor B -> GPIO 19
 */
 
 #include <Arduino.h>
