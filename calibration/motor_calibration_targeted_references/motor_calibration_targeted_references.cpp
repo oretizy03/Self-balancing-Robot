@@ -31,9 +31,9 @@
 enum FixedMotor { FIX_LEFT, FIX_RIGHT };
 const FixedMotor FIXED_MOTOR = FIX_RIGHT;
 const int FIXED_PWM = 200;
+const int SEARCH_CENTER_PWM = 140;
 const float LEFT_PULSES_PER_REV  = 40.0f;
 const float RIGHT_PULSES_PER_REV = 40.0f;
-const int SEARCH_CENTER_PWM = 140;
 const int COARSE_OFFSET = 10;
 const int COARSE_STEP = 5;
 const int FINE_OFFSET = 5;
