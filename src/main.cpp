@@ -48,34 +48,34 @@
 #define BIN2 13
 #define STBY 33
 #define BUZZER_PIN 23
-#define BUZZER_PASSIVE   1        // 0 for an active buzzer
-#define BUZZER_FREQ      2500
-#define PWM_FREQ         1000
-#define LEFT_DIR         1        // -1 if that wheel drives the wrong way
-#define RIGHT_DIR        1
-#define RIGHT_REF_PWM    200
-#define LEFT_MATCH_PWM   140
-#define SAMPLE_HZ        250
-#define GYRO_ZERO_AT_BOOT       1
+#define BUZZER_PASSIVE 1        // 0 for an active buzzer
+#define BUZZER_FREQ 2500
+#define PWM_FREQ 1000
+#define LEFT_DIR 1        // -1 if that wheel drives the wrong way
+#define RIGHT_DIR 1
+#define RIGHT_REF_PWM 200
+#define LEFT_MATCH_PWM 140
+#define SAMPLE_HZ 250
+#define GYRO_ZERO_AT_BOOT  1
 #define GYRO_ZERO_MAX_DELTA_DPS 2.0f   // reject refresh if it moved more than this
-#define UPRIGHT_WINDOW   5.0f     // deg from balance point to start engaging
-#define UPRIGHT_HOLD_MS  1000
-#define FALL_ANGLE       35.0f    // deg from balance point to cut motors
-#define I_MAX            80.0f
+#define UPRIGHT_WINDOW 5.0f     // deg from balance point to start engaging
+#define UPRIGHT_HOLD_MS 1000
+#define FALL_ANGLE 35.0f    // deg from balance point to cut motors
+#define I_MAX 80.0f
 
-static const float ALPHA      = 0.98f;
+static const float ALPHA = 0.98f;
 static const float LEFT_SCALE = (float)LEFT_MATCH_PWM / RIGHT_REF_PWM;
 static const uint32_t LOOP_US = 1000000UL / SAMPLE_HZ;
 
 // PID starting values, tune over serial
 static float kp = 20.0f, ki = 0.0f, kd = 0.8f, trim = 0.0f;
 
-#define LEFT_CH  0
+#define LEFT_CH 0
 #define RIGHT_CH 1
-#define BUZ_CH   2
+#define BUZ_CH 2
 
 Adafruit_MPU6050 mpu;
-MpuCalibration   cal;
+MpuCalibration cal;
 
 static float angle = 0.0f, iTerm = 0.0f, lastOut = 0.0f;
 static bool engaged = false, holding = false, telemetry = false;
