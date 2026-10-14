@@ -21,7 +21,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
-#include <PS4Arduino.h>
+#include <PS4Controller.h>
 #include <math.h>
 #include <string.h>
 
