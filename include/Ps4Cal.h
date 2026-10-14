@@ -3,20 +3,13 @@
  * Ps4Cal.h - Shared PS4 stick calibration helpers
 
  * WHAT IT DOES:
-    Defines the stick calibration record (centre, travel, deadzone, direction),
-    flash load/save, and the conversion from raw stick counts to a clean
-    -1..+1 value. Shared by the PS4 calibration tool and the drive firmware.
+    Defines the stick calibration record (centre, travel, deadzone, direction), flash load/save, and the conversion from raw stick counts to a clean -1..+1 value. Shared by the PS4 calibration tool and the drive firmware.
 
  * HOW TO USE:
-    Copy into the include/ folder of the balancing project. Run the PS4
-    calibration tool once, then call ps4CalLoad() in setup() of the drive
-    firmware and ps4Norm() / ps4Raw() in loop().
+    Copy into the include/ folder of the balancing project. Run the PS4 calibration tool once, then call ps4CalLoad() in setup() of the drive firmware and ps4Norm() / ps4Raw() in loop().
 
  * NOTE:
-    Raw stick values are the PS4Controller library's int8 counts (-128..127).
-    Direction (which sign means "forward" / "right") is measured by the tool and
-    stored in the record, so the library's up/right polarity does not matter.
-    Calibration lives in NVS, namespace "ps4cal", key "cal".
+    Raw stick values are the PS4Controller library's int8 counts (-128..127). Direction (which sign means "forward" / "right") is measured by the tool and stored in the record, so the library's up/right polarity does not matter. Calibration lives in NVS, namespace "ps4cal", key "cal".
 */
 
 #include <Arduino.h>

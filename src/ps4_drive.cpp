@@ -4,10 +4,9 @@
  * WHAT IT DOES:
     The PID balancing sketch plus Bluetooth driving from a PS4 controller. The
     sticks never command the wheels directly. They move the balance target:
-      - Left stick Y  -> target lean angle (forward / back), kept inside the
-                         permissible lean limits (maxLeanFwd / maxLeanBack)
-      - Right stick X -> steering (a left/right wheel difference on top of the
-                         balance output; balance always has priority)
+      - Left stick Y  -> target lean angle (forward / back), kept inside the permissible lean limits (maxLeanFwd / maxLeanBack)
+      - Right stick X -> steering (a left/right wheel difference on top of the balance output; balance always has priority)
+
     The robot then drives itself by holding that lean. Uses the saved MPU6050
     calibration (MpuCal.h), the saved PS4 stick calibration (Ps4Cal.h) and the
     motor speed match (RIGHT_REF_PWM, LEFT_MATCH_PWM).
@@ -29,12 +28,11 @@
        ? - print current values
 
  * CONTROLS:
-    Left stick Y   lean forward / back
-    Right stick X  steer
-    L1 (hold)      gentle mode: half the lean and half the steering
-    Circle         stop: motors off. Hold the robot upright 1 s to re-engage.
-    Controller lost or out of range: lean and steering fade to 0, the robot
-    keeps balancing in place.
+    1. Left stick Y - lean forward / back
+    2. Right stick X - steer
+    3. L1 (hold) - gentle mode: half the lean and half the steering
+    4. Circle - stop: motors off. Hold the robot upright 1 s to re-engage.
+    5. Controller lost or out of range: lean and steering fade to 0, the robot keeps balancing in place.
 
  * BEEPS:
     2 short - startup (before anything is loaded)
@@ -52,13 +50,7 @@
     5 quick, repeating - MPU6050 not found (halted)
 
  * NOTE:
-    A held lean is a held ACCELERATION, not a held speed: there is no wheel
-    speed loop, so the robot speeds up for as long as the stick is held. Two
-    guards keep that safe: the lean allowance shrinks as the motors approach
-    full PWM, and the lean target is slew-limited. Keep the lean limits small.
-    Positive angle = leaning forward. Loop rate and filter match the calibration
-    tool (250 Hz, 0.98). Needs the PS4-esp32 (PS4Controller) library, i.e.
-    Classic Bluetooth on a plain ESP32 with Arduino-ESP32 core 2.x.
+    A held lean is a held ACCELERATION, not a held speed: there is no wheel speed loop, so the robot speeds up for as long as the stick is held. Two guards keep that safe: the lean allowance shrinks as the motors approach full PWM, and the lean target is slew-limited. Keep the lean limits small. Positive angle = leaning forward. Loop rate and filter match the calibration tool (250 Hz, 0.98). Needs the PS4-esp32 (PS4Controller) library, i.e. Classic Bluetooth on a plain ESP32 with Arduino-ESP32 core 2.x.
 */
 
 #include <Arduino.h>
@@ -81,23 +73,23 @@
 #define BIN2 13
 #define STBY 33
 #define BUZZER_PIN 23
-#define BUZZER_PASSIVE 1        // 0 for an active buzzer
+#define BUZZER_PASSIVE 1  // 0 for an active buzzer
 #define BUZZER_FREQ 2500
 #define PWM_FREQ 1000
-#define LEFT_DIR 1        // -1 if that wheel drives the wrong way
+#define LEFT_DIR 1  // -1 if that wheel drives the wrong way
 #define RIGHT_DIR 1
 #define RIGHT_REF_PWM 200
 #define LEFT_MATCH_PWM 140
 #define SAMPLE_HZ 250
 #define GYRO_ZERO_AT_BOOT  1
-#define GYRO_ZERO_MAX_DELTA_DPS 2.0f   // reject refresh if it moved more than this
-#define UPRIGHT_WINDOW 5.0f     // deg from balance point to start engaging
+#define GYRO_ZERO_MAX_DELTA_DPS 2.0f // reject refresh if it moved more than this
+#define UPRIGHT_WINDOW 5.0f // deg from balance point to start engaging
 #define UPRIGHT_HOLD_MS 1000
-#define FALL_ANGLE 35.0f    // deg from balance point to cut motors
+#define FALL_ANGLE 35.0f  // deg from balance point to cut motors
 #define I_MAX 80.0f
 
 // Remote settings
-#define CTRL_MAC ""                   // "" = use the ESP32's own Bluetooth address
+#define CTRL_MAC ""
 #define THROTTLE_AXIS P4AX_LY         // stick that commands lean
 #define STEER_AXIS    P4AX_RX         // stick that commands steering
 #define STEER_DIR 1                   // -1 if the robot turns the wrong way
@@ -332,9 +324,7 @@ static void savePid()
 // Serial tuning
 static void printSettings()
 {
-  Serial.printf("Kp=%.3f Ki=%.3f Kd=%.3f trim=%.2f | lean max fwd=%.1f back=%.1f deg, turn max=%.0f | balance=%.3f deg gyroBiasY=%.4f deg/s | sticks %s\n",
-                kp, ki, kd, trim, maxLeanFwd, maxLeanBack, maxTurn, cal.balanceAngle, cal.gyroBias[1] * RAD_TO_DEG,
-                stickOk ? "calibrated" : "DISABLED (no PS4 calibration)");
+  Serial.printf("Kp=%.3f Ki=%.3f Kd=%.3f trim=%.2f | lean max fwd=%.1f back=%.1f deg, turn max=%.0f | balance=%.3f deg gyroBiasY=%.4f deg/s | sticks %s\n", kp, ki, kd, trim, maxLeanFwd, maxLeanBack, maxTurn, cal.balanceAngle, cal.gyroBias[1] * RAD_TO_DEG, stickOk ? "calibrated" : "DISABLED (no PS4 calibration)");
 }
 
 static void handleCmd(char *s)
@@ -577,7 +567,6 @@ void loop()
     lastOut = u;
     uMag += (fabsf(u) - uMag) * (dt / (SAT_TAU + dt));
 
-    // Balance has priority: steering only uses the PWM the balance output leaves free
     float room = 255.0f - fabsf(u);
     drive(u, clampf(turnCmd, -room, room));
   }
@@ -585,7 +574,6 @@ void loop()
   if (telemetry && millis() - lastTel >= 100)
   {
     lastTel = millis();
-    Serial.printf("ANGLE=%8.3f  ACCEL=%8.3f  RATE=%9.3f  LEAN=%6.2f  TURN=%5.0f  OUT=%5.0f  PAD=%d  %s\n",
-                  angle, accAngle, rate, leanCmd, turnCmd, lastOut, PS4.isConnected(), engaged ? "RUN" : "WAIT");
+    Serial.printf("ANGLE=%8.3f  ACCEL=%8.3f  RATE=%9.3f  LEAN=%6.2f  TURN=%5.0f  OUT=%5.0f  PAD=%d  %s\n",angle, accAngle, rate, leanCmd, turnCmd, lastOut, PS4.isConnected(), engaged ?  "RUN" : "WAIT");
   }
 }
